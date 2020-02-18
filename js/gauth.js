@@ -117,27 +117,30 @@
 
     // ----------------------------------------------------------------------------
     var KeysController = function() {
-        var storageService = null,
-            keyUtilities = null,
-            editingEnabled = false;
+        var editingEnabled = false;
+
+        var connect = function () {
+            HWTokenManager.connect().then(() => {
+                if (HWTokenManager.connected()) {
+                    updateKeys();
+                    setInterval(timerTick, 1000);
+                } else {
+                    $('#updatingIn').text("x");
+                    var $orig = $('#headerContent').hide();
+                    var $hint = $('<span>No Canokey <a href="#" style="color: inherit;">Click to connect</a></span>').insertAfter($orig);
+                    $hint.click(function (E) {
+                        E.preventDefault();
+                        $orig.show();
+                        $hint.remove();
+                        connect();
+                    });
+                }
+            });
+        };
 
         var init = function() {
-            storageService = new StorageService();
-            keyUtilities = new KeyUtilities(jsSHA);
 
-            // Check if local storage is supported
-            if (storageService.isSupported()) {
-                if (!storageService.getObject('accounts')) {
-                    addAccount('alice@google.com', 'JBSWY3DPEHPK3PXP');
-                }
-
-                updateKeys();
-                setInterval(timerTick, 1000);
-            } else {
-                // No support for localStorage
-                $('#updatingIn').text("x");
-                $('#accountsHeader').text("No Storage support");
-            }
+            connect();
 
             // Bind to keypress event for the input
             $('#addKeyButton').click(function() {
@@ -151,7 +154,7 @@
                     $.mobile.navigate('#main');
                 } else {
                     $('#keySecret').focus();
-		}
+                }
             });
 
             $('#addKeyCancel').click(function() {
@@ -160,36 +163,38 @@
 
             var clearAddFields = function() {
                 $('#keyAccount').val('');
-		$('#keySecret').val('');
+                $('#keySecret').val('');
             };
 
             $('#edit').click(function() { toggleEdit(); });
-            $('#export').click(function() { exportAccounts(); });
         };
 
-        var updateKeys = function() {
+        var updateKeys = async () => {
+            console.log('updateK')
             var accountList = $('#accounts');
             // Remove all except the first line
             accountList.find("li:gt(0)").remove();
 
-            $.each(storageService.getObject('accounts'), function (index, account) {
-                var key = keyUtilities.generate(account.secret);
-
+            var entries = await HWTokenManager.get();
+            console.log(entries);
+            for (const account of entries) {
+                await account.generate();
                 // Construct HTML
-                var detLink = $('<h3>' + key + '</h3><p>' + account.name + '</p>');
+                var detLink = $('<h3>' + account.code + '</h3><p>' + account.issuer + '</p>');
                 var accElem = $('<li data-icon="false">').append(detLink);
 
-                if(editingEnabled) {
+                if (editingEnabled) {
                     var delLink = $('<p class="ui-li-aside"><a class="ui-btn-icon-notext ui-icon-delete" href="#"></a></p>');
                     delLink.click(function () {
-                        deleteAccount(index);
+                        deleteAccount(account);
                     });
                     accElem.append(delLink);
                 }
 
                 // Add HTML element
                 accountList.append(accElem);
-            });
+            }
+
             accountList.listview().listview('refresh');
         };
 
@@ -203,20 +208,10 @@
             updateKeys();
         };
 
-        var exportAccounts = function() {
-            var accounts = JSON.stringify(storageService.getObject('accounts'));
-            var blob = new Blob([accounts], {type: 'text/plain;charset=utf-8'});
-
-            saveAs(blob, 'gauth-export.json');
-        };
-
-        var deleteAccount = function(index) {
-            // Remove object by index
-            var accounts = storageService.getObject('accounts');
-            accounts.splice(index, 1);
-            storageService.setObject('accounts', accounts);
-
-            updateKeys();
+        var deleteAccount = function (account) {
+            account.delete().then(() => {
+                updateKeys();
+            });
         };
 
         var addAccount = function(name, secret) {
@@ -226,21 +221,17 @@
             }
 
             // Construct JSON object
-            var account = {
-                'name': name,
+            var account = new OTPEntry({
+                'index': 0,
+                'issuer': name,
+                'type': 1,
+                'algorithm': 1,
                 'secret': secret
-            };
+            });
 
-            // Persist new object
-            var accounts = storageService.getObject('accounts');
-            if (!accounts) {
-                // if undefined create a new array
-                accounts = [];
-            }
-            accounts.push(account);
-            storageService.setObject('accounts', accounts);
-
-            updateKeys();
+            account.create().then(()=>{
+                updateKeys();
+            });
 
             return true;
         };
