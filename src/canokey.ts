@@ -71,11 +71,11 @@ export class Canokey {
 
   private async transceive(capdu: String) {
     if (!this.device) throw new Error("Device not connected");
-    console.log("Tx", capdu);
+    console.debug("Tx", capdu);
     let data = Canokey.hexStringToByte(capdu);
     let reshapedData = Canokey.reshape(data); // divide command into 16-byte chunks
     // send a command
-    console.log('to s', this.device, reshapedData);
+    // console.debug('to s', this.device, reshapedData);
     for (let i = 0; i < reshapedData.length; ++i)
       await this.device.controlTransferOut(
         {
@@ -87,9 +87,9 @@ export class Canokey {
         },
         reshapedData[i]
       );
-    console.log('sent');
+    console.debug('sent');
     // execute
-    let resp = await this.device.controlTransferIn(
+    let respExec = await this.device.controlTransferIn(
       {
         requestType: "vendor",
         recipient: "interface",
@@ -97,12 +97,12 @@ export class Canokey {
         value: 0,
         index: 1
       },
-      0
+      1
     );
-    console.log('exec');
+    console.debug('exec', respExec);
     // wait for execution
     for (let retry = 0; ; retry++) {
-      resp = await this.device.controlTransferIn(
+      let respWait = await this.device.controlTransferIn(
         {
           requestType: "vendor",
           recipient: "interface",
@@ -112,14 +112,14 @@ export class Canokey {
         },
         1
       );
-      if (!resp.data) throw new Error("Empty data from the device");
-      console.log('wait', resp.data.byteLength, resp.data.getUint8(0));
-      if (resp.data.getUint8(0) == 0) break;
+      if (!respWait.data) throw new Error("Empty data from the device");
+      console.debug('wait', respWait.data.byteLength, respWait.data.getUint8(0));
+      if (respWait.data.getUint8(0) == 0) break;
       if (retry >= 5) throw new Error("Device timeout");
       await Canokey.sleep(100);
     }
     // get the response
-    resp = await this.device.controlTransferIn(
+    let resp = await this.device.controlTransferIn(
       {
         requestType: "vendor",
         recipient: "interface",
@@ -132,7 +132,7 @@ export class Canokey {
     if (resp.status === "ok") {
       if (!resp.data) throw new Error("Empty data from the device");
       let rx = Canokey.byteToHexString(new Uint8Array(resp.data.buffer));
-      console.log("rx    ", rx);
+      console.debug("rx    ", rx);
       return rx;
     }
     return "";
@@ -156,7 +156,7 @@ export class Canokey {
             }
           ]
         });
-        console.log(this.device);
+        console.debug(this.device);
         if (this.device === undefined) {
           throw new Error("requestDevice returns undefined");
         }
@@ -168,7 +168,8 @@ export class Canokey {
 
     try {
       await this.device.open();
-      if(this.device.configuration === null)
+      console.debug(this.device.configurations);
+      if (this.device.configuration === null)
         await this.device.selectConfiguration(1);
       await this.device.claimInterface(1);
     } catch (err) {
@@ -181,7 +182,7 @@ export class Canokey {
     if (!r.endsWith("9000")) throw new Error("Failed to select OATH applet");
   }
   async executeCommand(ins: number, payload: Uint8Array = new Uint8Array(0)) {
-    console.log('executeCommand', ins, payload);
+    console.debug('executeCommand', ins, payload);
     await this.selectApplet();
     let capdu = Uint8Array.from([
       0,
@@ -205,7 +206,7 @@ export class Canokey {
     tlv: Uint8Array,
     callback: (tag: number, data: Uint8Array) => Promise<void>
   ) {
-    for (let i = 0; i < tlv.length; ) {
+    for (let i = 0; i < tlv.length;) {
       const tag = tlv[i++];
       const len = tlv[i++];
       await callback(tag, tlv.slice(i, i + len));
@@ -376,10 +377,13 @@ export class HWTokenManager {
     return HWTokenManager.tokenDevice.isConnected();
   }
   static async add(entry: OTPEntry) {
-    HWTokenManager.entryCache = undefined;
+    if (!entry.secret) return
+    if (await HWTokenManager.tokenDevice.putNewEntry(entry.issuer, entry.secret, entry.algorithm, entry.type, entry.digits))
+      HWTokenManager.entryCache = undefined;
   }
   static async delete(entry: HWTokenEntry) {
-    HWTokenManager.entryCache = undefined;
+    if (await HWTokenManager.tokenDevice.deleteEntry(entry.issuer))
+      HWTokenManager.entryCache = undefined;
   }
   static async get() {
     if (HWTokenManager.entryCache !== undefined)
