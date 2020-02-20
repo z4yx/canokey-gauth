@@ -14,6 +14,31 @@ export class Canokey {
     return this.device instanceof USBDevice && this.device.opened;
   }
 
+  static base32ToHex(base32: string) {
+    let base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let bits = "";
+    let hex = "";
+
+    for (let i = 0; i < base32.length; i++) {
+      let val = base32chars.indexOf(base32.charAt(i).toUpperCase());
+      bits += Canokey.leftpad(val.toString(2), 5, '0');
+    }
+
+    for (let i = 0; i + 4 <= bits.length; i += 4) {
+      let chunk = bits.substr(i, 4);
+      hex = hex + parseInt(chunk, 2).toString(16);
+    }
+
+    return hex;
+  };
+
+  static leftpad(str: string, len: number, pad: string) {
+    if (len + 1 >= str.length) {
+      str = new Array(len + 1 - str.length).join(pad) + str;
+    }
+    return str;
+  };
+
   static byteToHexString(uint8arr: Uint8Array) {
     if (!uint8arr) return "";
     var hexStr = "";
@@ -296,6 +321,47 @@ export class Canokey {
     }
     return null;
   }
+  async putNewEntry(name: string, secret: string, algo: OTPAlgorithm, type: OTPType, digits: number) {
+    try {
+      const secBytes = Canokey.hexStringToByte(Canokey.base32ToHex(secret));
+      const nameBytes = this.utf8Encoder.encode(name);
+      let ret = await this.executeCommand(
+        0x01,
+        Uint8Array.from([
+          0x71,
+          nameBytes.length,
+          ...Array.from(nameBytes),
+          0x73,
+          secBytes.length + 2,
+          (algo == OTPAlgorithm.SHA1 ? 1 : 2) | (type == OTPType.hotp ? 0x10 : 0x20),
+          digits & 0xf,
+          ...Array.from(secBytes),
+          0x78, 1, 0,
+        ])
+      );
+      return ret[0] == 0x90 && ret[1] == 0x00;
+    } catch (err) {
+      console.error("putNewEntry failed", err);
+    }
+    return null;
+  }
+  async deleteEntry(name: string) {
+    try {
+      const nameBytes = this.utf8Encoder.encode(name);
+      let ret = await this.executeCommand(
+        0x02,
+        Uint8Array.from([
+          0x71,
+          nameBytes.length,
+          ...Array.from(nameBytes),
+        ])
+      );
+      return ret[0] == 0x90 && ret[1] == 0x00;
+    } catch (err) {
+      console.error("deleteEntry failed", err);
+    }
+    return null;
+  }
 }
 
 export class HWTokenManager {
@@ -394,12 +460,12 @@ export class HWTokenEntry extends OTPEntry {
     });
     // this.secret = null;
   }
-  async create() {
-    await HWTokenManager.add(this);
-  }
-  async delete() {
-    await HWTokenManager.delete(this);
-  }
+  // async create() {
+  //   await HWTokenManager.add(this);
+  // }
+  // async delete() {
+  //   await HWTokenManager.delete(this);
+  // }
   async generate() {
     const code = await HWTokenManager.calc(this);
     this.code = code ? code : "&bull;&bull;&bull;&bull;&bull;&bull;";

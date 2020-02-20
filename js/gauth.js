@@ -118,11 +118,12 @@
     // ----------------------------------------------------------------------------
     var KeysController = function() {
         var editingEnabled = false;
+        var refreshEnabled = false;
 
         var connect = function () {
-            HWTokenManager.connect().then(() => {
+            HWTokenManager.connect().then(async () => {
                 if (HWTokenManager.connected()) {
-                    updateKeys();
+                    await updateKeys();
                     setInterval(timerTick, 1000);
                 } else {
                     $('#updatingIn').text("x");
@@ -205,12 +206,13 @@
             } else {
                 $('#addButton').hide();
             }
-            updateKeys();
         };
 
         var deleteAccount = function (account) {
-            account.delete().then(() => {
-                updateKeys();
+            refreshEnabled = false;
+            HWTokenManager.delete(account).then(async () => {
+                await updateKeys();
+                refreshEnabled = true;
             });
         };
 
@@ -229,8 +231,10 @@
                 'secret': secret
             });
 
-            account.create().then(()=>{
-                updateKeys();
+            refreshEnabled = false;
+            HWTokenManager.add(account).then(async ()=>{
+                await updateKeys();
+                refreshEnabled = true;
             });
 
             return true;
@@ -239,7 +243,7 @@
         var timerTick = function() {
             var epoch = Math.round(new Date().getTime() / 1000.0);
             var countDown = 30 - (epoch % 30);
-            if (epoch % 30 === 0) {
+            if (epoch % 30 === 0 && refreshEnabled) {
                 updateKeys();
             }
             $('#updatingIn').text(countDown);
