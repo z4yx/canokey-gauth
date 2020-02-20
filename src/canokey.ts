@@ -88,8 +88,8 @@ export class Canokey {
         1
       );
       if (!resp.data) throw new Error("Empty data from the device");
-      console.log('wait', resp.data.getUint8(0));
-      if (resp.data.getUint8(0) === 1) break;
+      console.log('wait', resp.data.byteLength, resp.data.getUint8(0));
+      if (resp.data.getUint8(0) == 0) break;
       if (retry >= 5) throw new Error("Device timeout");
       await Canokey.sleep(100);
     }
@@ -143,6 +143,8 @@ export class Canokey {
 
     try {
       await this.device.open();
+      if(this.device.configuration === null)
+        await this.device.selectConfiguration(1);
       await this.device.claimInterface(1);
     } catch (err) {
       console.error("Failed to open the device", err);
@@ -192,7 +194,7 @@ export class Canokey {
       name: string;
     }[] = [];
     try {
-      let tlv = await this.executeCommand(0x06);
+      let tlv = await this.executeCommand(0x03);
       await Canokey.processTlv(tlv, async (tag, data) => {
         if (tag != 0x72) {
           console.warn(`Unknown tag ${tag}`);
