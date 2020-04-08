@@ -154,6 +154,8 @@
                     clearAddFields();
                     $.mobile.navigate('#main');
                 } else {
+                    //$('#keyAccount').val('test name');
+                    //$('#keySecret').val('JBSWY3DPEHPK3PXP');
                     $('#keySecret').focus();
                 }
             });
