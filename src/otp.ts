@@ -68,17 +68,13 @@ export class OTPEntry {
     } else {
       this.period = 30;
     }
-    if (this.type !== OTPType.hotp) {
-      this.generate();
-    }
   }
 
   async next() {
     if (this.type !== OTPType.hotp) {
       return;
     }
-    this.generate();
-    return;
+    return this.generate();
   }
 
   async generate() {
