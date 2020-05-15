@@ -119,12 +119,15 @@
     var KeysController = function() {
         var editingEnabled = false;
         var refreshEnabled = false;
+        var timerHandle = null;
 
         var connect = function () {
             HWTokenManager.connect().then(async () => {
                 if (HWTokenManager.connected()) {
                     await updateKeys();
-                    setInterval(timerTick, 1000);
+                    if(timerHandle !== null)
+                        clearInterval(timerHandle);
+                    timerHandle = setInterval(timerTick, 1000);
                 } else {
                     $('#updatingIn').text("x");
                     var $orig = $('#headerContent').hide();

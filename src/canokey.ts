@@ -9,6 +9,7 @@ export class Canokey {
   device: USBDevice | undefined;
   utf8Decoder = new TextDecoder("utf-8");
   utf8Encoder = new TextEncoder();
+  private transceiveLock = false;
 
   isConnected() {
     return this.device instanceof USBDevice && this.device.opened;
@@ -63,71 +64,68 @@ export class Canokey {
   }
 
   private async transceive(capdu: String) {
+    console.debug("APDU --->", capdu);
     if (!this.device) throw new Error("Device not connected");
-    console.debug("Tx", capdu);
-    let data = Canokey.hexStringToByte(capdu);
-    // send a command
-    // console.debug('to s', this.device, reshapedData);
-    let respCmd = await this.device.controlTransferOut(
-      {
-        requestType: "vendor",
-        recipient: "interface",
-        request: 0,
-        value: 0,
-        index: 1
-      },
-      data
-    );
-    console.debug('sent', respCmd);
-    // execute
-    // let respExec = await this.device.controlTransferIn(
-    //   {
-    //     requestType: "vendor",
-    //     recipient: "interface",
-    //     request: 1,
-    //     value: 0,
-    //     index: 1
-    //   },
-    //   1
-    // );
-    // console.debug('exec', respExec);
-    // wait for execution
-    for (let retry = 0; ; retry++) {
-      let respWait = await this.device.controlTransferIn(
+    if (this.transceiveLock) throw new Error("Another APDU on-going");
+    this.transceiveLock = true;
+    try {
+      let data = Canokey.hexStringToByte(capdu);
+      // send a command
+      // console.debug('to s', this.device, reshapedData);
+      let respCmd = await this.device.controlTransferOut(
         {
           requestType: "vendor",
           recipient: "interface",
-          request: 2,
+          request: 0,
           value: 0,
           index: 1
         },
-        1
+        data
       );
-      console.debug('wait', respWait);
-      if (!respWait.data || respWait.data.byteLength === 0) throw new Error("Empty data from the device");
-      console.debug('state qry', respWait.data.byteLength, respWait.data.getUint8(0));
-      if (respWait.data.getUint8(0) == 0) break;
-      if (retry >= 5) throw new Error("Device timeout");
-      await Canokey.sleep(100);
+      console.debug('sent', respCmd);
+      // wait for execution
+      for (let retry = 0; ; retry++) {
+        let respWait = await this.device.controlTransferIn(
+          {
+            requestType: "vendor",
+            recipient: "interface",
+            request: 2,
+            value: 0,
+            index: 1
+          },
+          1
+        );
+        console.debug('wait', respWait);
+        if (!respWait.data || respWait.data.byteLength === 0) throw new Error("Empty data from the device");
+        console.debug('state qry', respWait.data.byteLength, respWait.data.getUint8(0));
+        if (respWait.data.getUint8(0) == 0) break;
+        if (retry >= 5) throw new Error("Device timeout");
+        await Canokey.sleep(100);
+      }
+      // get the response
+      let resp = await this.device.controlTransferIn(
+        {
+          requestType: "vendor",
+          recipient: "interface",
+          request: 1,
+          value: 0,
+          index: 1
+        },
+        1500
+      );
+      if (resp.status === "ok") {
+        if (!resp.data) throw new Error("Empty data from the device");
+        let rx = Canokey.byteToHexString(new Uint8Array(resp.data.buffer));
+        console.debug("APDU <---", rx);
+        return rx;
+      }
+      return "";
+
+    } catch (E) {
+      throw E;
+    } finally {
+      this.transceiveLock = false;
     }
-    // get the response
-    let resp = await this.device.controlTransferIn(
-      {
-        requestType: "vendor",
-        recipient: "interface",
-        request: 1,
-        value: 0,
-        index: 1
-      },
-      1500
-    );
-    if (resp.status === "ok") {
-      if (!resp.data) throw new Error("Empty data from the device");
-      let rx = Canokey.byteToHexString(new Uint8Array(resp.data.buffer));
-      console.debug("rx    ", rx);
-      return rx;
-    }
-    return "";
   }
   async connectToDevice() {
     try {
@@ -218,12 +216,17 @@ export class Canokey {
         if (tag != 0x72) {
           console.warn(`Unknown tag ${tag}`);
         } else {
-          const prop = data[0];
+          // const prop = data[0];
+          // entries.push({
+          //   type: (prop & 0xf0) == 0x10 ? OTPType.hotp : OTPType.totp,
+          //   algo:
+          //     (prop & 0x0f) == 0x01 ? OTPAlgorithm.SHA1 : OTPAlgorithm.SHA256,
+          //   name: this.utf8Decoder.decode(data.slice(1))
+          // });
           entries.push({
-            type: (prop & 0xf0) == 0x10 ? OTPType.hotp : OTPType.totp,
-            algo:
-              (prop & 0x0f) == 0x01 ? OTPAlgorithm.SHA1 : OTPAlgorithm.SHA256,
-            name: this.utf8Decoder.decode(data.slice(1))
+            type: OTPType.totp,
+            algo: OTPAlgorithm.SHA1,
+            name: this.utf8Decoder.decode(data)
           });
         }
       });
@@ -264,7 +267,7 @@ export class Canokey {
           code = SpecialCode.touchRequired;
         } else if (tag == 0x76) {
           digits = data[0];
-          code = new DataView(data, 1).getUint32(0, false);
+          code = new DataView(data.buffer, 1).getUint32(0, false);
         } else if (tag == 0x71) {
           name = this.utf8Decoder.decode(data);
         } else {
@@ -304,7 +307,7 @@ export class Canokey {
       await Canokey.processTlv(tlv, async (tag, data) => {
         if (tag == 0x76) {
           digits = data[0];
-          code = new DataView(data, 1).getUint32(0, false);
+          code = new DataView(data.buffer, 1).getUint32(0, false);
         } else {
           console.warn(`Unknown tag ${tag}`);
         }
@@ -394,9 +397,12 @@ export class HWTokenManager {
   }
   private static num2str(val: number, digits: number) {
     let s = ("" + val);
+    if (s.length >= digits)
+      return s.substring(s.length - digits);
     return "0".repeat(digits - s.length) + s;
   }
   private static async calcThenCache(challenge: number, entry: OTPEntry) {
+    console.log("calcThenCache")
     const results = await HWTokenManager.tokenDevice.calculateAll(challenge);
     let cache: Record<string, string> = {};
     if (results) {
