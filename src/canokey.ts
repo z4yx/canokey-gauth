@@ -58,13 +58,6 @@ export class Canokey {
     return new Uint8Array(a);
   }
 
-  static reshape(data: Uint8Array) {
-    const packets = [];
-    for (let i = 0; i < data.length; i += 16)
-      packets.push(data.slice(i, i + 16));
-    return packets;
-  }
-
   static async sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -73,47 +66,46 @@ export class Canokey {
     if (!this.device) throw new Error("Device not connected");
     console.debug("Tx", capdu);
     let data = Canokey.hexStringToByte(capdu);
-    let reshapedData = Canokey.reshape(data); // divide command into 16-byte chunks
     // send a command
     // console.debug('to s', this.device, reshapedData);
-    for (let i = 0; i < reshapedData.length; ++i)
-      await this.device.controlTransferOut(
-        {
-          requestType: "vendor",
-          recipient: "interface",
-          request: 0,
-          value: (i == 0 ? 0x4000 : 0x8000) + i,
-          index: 1
-        },
-        reshapedData[i]
-      );
-    console.debug('sent');
-    // execute
-    let respExec = await this.device.controlTransferIn(
+    let respCmd = await this.device.controlTransferOut(
       {
         requestType: "vendor",
         recipient: "interface",
-        request: 1,
+        request: 0,
         value: 0,
         index: 1
       },
-      1
+      data
     );
-    console.debug('exec', respExec);
+    console.debug('sent', respCmd);
+    // execute
+    // let respExec = await this.device.controlTransferIn(
+    //   {
+    //     requestType: "vendor",
+    //     recipient: "interface",
+    //     request: 1,
+    //     value: 0,
+    //     index: 1
+    //   },
+    //   1
+    // );
+    // console.debug('exec', respExec);
     // wait for execution
     for (let retry = 0; ; retry++) {
       let respWait = await this.device.controlTransferIn(
         {
           requestType: "vendor",
           recipient: "interface",
-          request: 3,
+          request: 2,
           value: 0,
           index: 1
         },
         1
       );
-      if (!respWait.data) throw new Error("Empty data from the device");
-      console.debug('wait', respWait.data.byteLength, respWait.data.getUint8(0));
+      console.debug('wait', respWait);
+      if (!respWait.data || respWait.data.byteLength === 0) throw new Error("Empty data from the device");
+      console.debug('state qry', respWait.data.byteLength, respWait.data.getUint8(0));
       if (respWait.data.getUint8(0) == 0) break;
       if (retry >= 5) throw new Error("Device timeout");
       await Canokey.sleep(100);
@@ -123,7 +115,7 @@ export class Canokey {
       {
         requestType: "vendor",
         recipient: "interface",
-        request: 2,
+        request: 1,
         value: 0,
         index: 1
       },
@@ -169,6 +161,7 @@ export class Canokey {
     try {
       await this.device.open();
       console.debug(this.device.configurations);
+      await Canokey.sleep(100);
       if (this.device.configuration === null)
         await this.device.selectConfiguration(1);
       await this.device.claimInterface(1);
