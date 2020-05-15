@@ -322,7 +322,7 @@ export class Canokey {
     try {
       const secBytes = Canokey.hexStringToByte(Canokey.base32ToHex(secret));
       const nameBytes = this.utf8Encoder.encode(name);
-      let ret = await this.executeCommand(
+      await this.executeCommand(
         0x01,
         Uint8Array.from([
           0x71,
@@ -336,16 +336,16 @@ export class Canokey {
           0x78, 1, 0,
         ])
       );
-      return ret[0] == 0x90 && ret[1] == 0x00;
+      return true;
     } catch (err) {
       console.error("putNewEntry failed", err);
     }
-    return null;
+    return false;
   }
   async deleteEntry(name: string) {
     try {
       const nameBytes = this.utf8Encoder.encode(name);
-      let ret = await this.executeCommand(
+      await this.executeCommand(
         0x02,
         Uint8Array.from([
           0x71,
@@ -353,11 +353,11 @@ export class Canokey {
           ...Array.from(nameBytes),
         ])
       );
-      return ret[0] == 0x90 && ret[1] == 0x00;
+      return true;
     } catch (err) {
       console.error("deleteEntry failed", err);
     }
-    return null;
+    return false;
   }
 }
 
@@ -382,6 +382,7 @@ export class HWTokenManager {
       HWTokenManager.entryCache = undefined;
   }
   static async get() {
+    console.log("HWTokenManager.get")
     if (HWTokenManager.entryCache !== undefined)
       return HWTokenManager.entryCache;
     const hwEntries = await HWTokenManager.tokenDevice.listEntries();
@@ -394,6 +395,13 @@ export class HWTokenManager {
         algorithm: item.algo
       });
     });
+  }
+  static async getCalculated() {
+    let entries = await HWTokenManager.get();
+    console.log('entries', entries);
+    for (const account of entries)
+        await account.generate();
+    return entries;
   }
   private static num2str(val: number, digits: number) {
     let s = ("" + val);
@@ -412,6 +420,7 @@ export class HWTokenManager {
       });
       HWTokenManager.totpCache[challenge] = cache;
     }
+    console.log("cache=",cache,entry.issuer,cache[entry.issuer])
     return entry.issuer in cache ? cache[entry.issuer] : null;
   }
   static async calc(entry: OTPEntry) {

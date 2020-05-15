@@ -128,6 +128,7 @@
                     if(timerHandle !== null)
                         clearInterval(timerHandle);
                     timerHandle = setInterval(timerTick, 1000);
+                    refreshEnabled = true;
                 } else {
                     $('#updatingIn').text("x");
                     var $orig = $('#headerContent').hide();
@@ -182,7 +183,7 @@
             accountList.find("li:gt(0)").remove();
 
             var entries = await HWTokenManager.get();
-            console.log(entries);
+            console.log('entries', entries);
             for (const account of entries) {
                 await account.generate();
                 // Construct HTML
@@ -211,6 +212,7 @@
             } else {
                 $('#addButton').hide();
             }
+            updateKeys(); // show/hide the delete button
         };
 
         var deleteAccount = function (account) {
