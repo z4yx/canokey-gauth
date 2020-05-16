@@ -208,26 +208,29 @@ export class Canokey {
     let entries: {
       type: OTPType;
       algo: OTPAlgorithm;
+      digits: number;
       name: string;
     }[] = [];
     try {
       let tlv = await this.executeCommand(0x03);
       await Canokey.processTlv(tlv, async (tag, data) => {
-        if (tag != 0x72) {
-          console.warn(`Unknown tag ${tag}`);
-        } else {
-          // const prop = data[0];
-          // entries.push({
-          //   type: (prop & 0xf0) == 0x10 ? OTPType.hotp : OTPType.totp,
-          //   algo:
-          //     (prop & 0x0f) == 0x01 ? OTPAlgorithm.SHA1 : OTPAlgorithm.SHA256,
-          //   name: this.utf8Decoder.decode(data.slice(1))
-          // });
+        if (tag == 0x71 || tag == 0x72) {
           entries.push({
             type: OTPType.totp,
             algo: OTPAlgorithm.SHA1,
+            digits: 6,
             name: this.utf8Decoder.decode(data)
           });
+        } else if (tag == 0x75) {
+          if (entries.length > 0) {
+            let lastOne = entries[entries.length - 1];
+            lastOne.type = (data[0] & 0xf0) == 0x10 ? OTPType.hotp : OTPType.totp;
+            lastOne.algo =
+              (data[0] & 0x0f) == 0x01 ? OTPAlgorithm.SHA1 : OTPAlgorithm.SHA256;
+            lastOne.digits = data[1];
+          }
+        } else {
+          console.warn(`Unknown tag ${tag}`);
         }
       });
     } catch (err) {
@@ -390,6 +393,7 @@ export class HWTokenManager {
       return new HWTokenEntry({
         index: index++,
         type: item.type,
+        digits: item.digits,
         issuer: item.name,
         algorithm: item.algo
       });
