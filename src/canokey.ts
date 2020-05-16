@@ -236,11 +236,8 @@ export class Canokey {
     return entries;
   }
   static uint64ToBytes(val: number) {
-    const buffer = new ArrayBuffer(8);
-    const view = new DataView(buffer);
-    view.setUint32(0, val >>> 32, false);
-    view.setUint32(4, val & 0xffffffff, false);
-    return new Uint8Array(buffer);
+    const hex = this.leftpad(val.toString(16), 16, '0');
+    return this.hexStringToByte(hex);
   }
   async calculateAll(challenge: number) {
     let entries: {
@@ -404,7 +401,7 @@ export class HWTokenManager {
     return entries;
   }
   private static num2str(val: number, digits: number) {
-    let s = ("" + val);
+    let s = val.toString();
     if (s.length >= digits)
       return s.substring(s.length - digits);
     return "0".repeat(digits - s.length) + s;
