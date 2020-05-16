@@ -64,7 +64,7 @@ export class Canokey {
   }
 
   private async transceive(capdu: String) {
-    console.debug("APDU --->", capdu);
+    console.log("APDU --->", capdu);
     if (!this.device) throw new Error("Device not connected");
     if (this.transceiveLock) throw new Error("Another APDU on-going");
     this.transceiveLock = true;
@@ -99,7 +99,7 @@ export class Canokey {
         if (!respWait.data || respWait.data.byteLength === 0) throw new Error("Empty data from the device");
         console.debug('state qry', respWait.data.byteLength, respWait.data.getUint8(0));
         if (respWait.data.getUint8(0) == 0) break;
-        if (retry >= 5) throw new Error("Device timeout");
+        if (retry >= 50) throw new Error("Device timeout");
         await Canokey.sleep(100);
       }
       // get the response
@@ -116,7 +116,7 @@ export class Canokey {
       if (resp.status === "ok") {
         if (!resp.data) throw new Error("Empty data from the device");
         let rx = Canokey.byteToHexString(new Uint8Array(resp.data.buffer));
-        console.debug("APDU <---", rx);
+        console.log("APDU <---", rx);
         return rx;
       }
       return "";
@@ -186,7 +186,7 @@ export class Canokey {
     let rapdu = await this.transceive(Canokey.byteToHexString(capdu));
     let ret = rapdu.slice(0, -4);
     while (rapdu.slice(-4, -2) == "61") {
-      rapdu = await this.transceive("00060000");
+      rapdu = await this.transceive("00060000" + rapdu.slice(-2));
       ret += rapdu.slice(0, -4);
     }
     if (!rapdu.endsWith("9000"))
