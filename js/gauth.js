@@ -122,11 +122,12 @@
         var timerHandle = null;
 
         var connect = function () {
+            if(timerHandle !== null)
+                clearInterval(timerHandle);
+            timerHandle = null;
             HWTokenManager.connect().then(async () => {
                 if (HWTokenManager.connected()) {
                     await updateKeys();
-                    if(timerHandle !== null)
-                        clearInterval(timerHandle);
                     timerHandle = setInterval(timerTick, 1000);
                     refreshEnabled = true;
                 } else {
@@ -203,6 +204,9 @@
             }
 
             accountList.listview().listview('refresh');
+
+            if(!HWTokenManager.connected())
+                connect();
         };
 
         var toggleEdit = function() {

@@ -363,8 +363,10 @@ export class HWTokenManager {
   static totpCache: Record<number, Record<string, string>> = {};
   static entryCache: HWTokenEntry[] | undefined;
   static async connect() {
-    if (!HWTokenManager.tokenDevice.isConnected())
+    if (!HWTokenManager.tokenDevice.isConnected()) {
+      this.flushCache();
       await HWTokenManager.tokenDevice.connectToDevice();
+    }
   }
   static connected() {
     return HWTokenManager.tokenDevice.isConnected();
@@ -372,11 +374,11 @@ export class HWTokenManager {
   static async add(entry: OTPEntry) {
     if (!entry.secret) return
     if (await HWTokenManager.tokenDevice.putNewEntry(entry.issuer, entry.secret, entry.algorithm, entry.type, entry.digits))
-      HWTokenManager.entryCache = undefined;
+      this.flushCache();
   }
   static async delete(entry: HWTokenEntry) {
     if (await HWTokenManager.tokenDevice.deleteEntry(entry.issuer))
-      HWTokenManager.entryCache = undefined;
+      this.flushCache();
   }
   static async get() {
     console.log("HWTokenManager.get")
@@ -441,6 +443,9 @@ export class HWTokenManager {
         ? null
         : HWTokenManager.num2str(result.code, result.digits);
     }
+  }
+  static flushCache() {
+    HWTokenManager.entryCache = undefined;
   }
 }
 
