@@ -231,10 +231,11 @@
             editingEnabled = !editingEnabled;
             if(editingEnabled) {
                 $('#addButton').show();
+                $('.delete-entry').show();
             } else {
                 $('#addButton').hide();
+                $('.delete-entry').hide();
             }
-            updateKeys(); // show/hide the delete button
         };
 
         var deleteAccount = function (account) {

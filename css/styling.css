@@ -45,7 +45,7 @@ footer, div[data-role="footer"] {
     box-shadow: none;
 }
 
-#addButton {
+#addButton, li p.delete-entry {
     display: none;
 }
 
