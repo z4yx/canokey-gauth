@@ -71,7 +71,7 @@ export class OTPEntry {
   }
 
   async next() {
-    if (this.type !== OTPType.hotp) {
+    if (this.type === OTPType.hotp) {
       return;
     }
     return this.generate();

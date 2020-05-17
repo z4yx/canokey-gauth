@@ -180,27 +180,45 @@
         var updateKeys = async () => {
             console.log('updateK')
             var accountList = $('#accounts');
-            // Remove all except the first line
-            accountList.find("li:gt(0)").remove();
+            var uiEntries = accountList.find("li:gt(0)");
 
             var entries = await HWTokenManager.get();
             console.log('entries', entries);
+            var appending = false;
+            var item = uiEntries.eq(0);
+            if(uiEntries.length != entries.length) {
+                appending = true;
+                uiEntries.remove();
+            }
             for (const account of entries) {
-                await account.generate();
-                // Construct HTML
-                var detLink = $('<h3>' + account.code + '</h3><p>' + account.issuer + '</p>');
-                var accElem = $('<li data-icon="false">').append(detLink);
+                // generate TOTP only
+                await account.next();
 
-                if (editingEnabled) {
-                    var delLink = $('<p class="ui-li-aside"><a class="ui-btn-icon-notext ui-icon-delete" href="#"></a></p>');
-                    delLink.click(function () {
-                        deleteAccount(account);
-                    });
-                    accElem.append(delLink);
+                if (!appending && item.children('p:eq(0)').text() === account.issuer) {
+                    item.children('h3').html(account.code);
+                    item = item.next();
+                    continue;
                 }
 
-                // Add HTML element
-                accountList.append(accElem);
+                // Construct HTML
+                var detLink = $('<h3>' + account.code + '</h3><p></p>');
+                var accElem = $('<li data-icon="false">').append(detLink);
+                accElem.find('p').text(account.issuer);
+
+                var delLink = $('<p class="ui-li-aside delete-entry"><a class="ui-btn-icon-notext ui-icon-delete" href="#"></a></p>');
+                delLink.click(function () {
+                    deleteAccount(account);
+                });
+                accElem.append(delLink);
+
+                if (appending) {
+                    // Add HTML element
+                    accountList.append(accElem);
+                } else {
+                    var cur = item;
+                    item = item.next();
+                    cur.replaceWith(accElem);
+                }
             }
 
             accountList.listview().listview('refresh');
