@@ -155,7 +155,7 @@
                 // remove spaces from secret
                 secret = secret.replace(/ /g, '');
                 if(secret !== '') {
-                    addAccount(name, secret);
+                    addAccount(name, secret, $('#keyTypeTOTP').is(':checked'));
                     clearAddFields();
                     $.mobile.navigate('#main');
                 } else {
@@ -175,6 +175,11 @@
             };
 
             $('#edit').click(function() { toggleEdit(); });
+        };
+
+        var calculateSingleEntry = async ($entry, account) => {
+            await account.generate();
+            $entry.children('h3').html(account.code);
         };
 
         var updateKeys = async () => {
@@ -204,10 +209,15 @@
                 var detLink = $('<h3>' + account.code + '</h3><p></p>');
                 var accElem = $('<li data-icon="false">').append(detLink);
                 accElem.find('p').text(account.issuer);
+                accElem.click(function () {
+                    calculateSingleEntry($(this), account);
+                    return true;
+                });
 
                 var delLink = $('<p class="ui-li-aside delete-entry"><a class="ui-btn-icon-notext ui-icon-delete" href="#"></a></p>');
                 delLink.click(function () {
                     deleteAccount(account);
+                    return true;
                 });
                 accElem.append(delLink);
 
@@ -246,7 +256,7 @@
             });
         };
 
-        var addAccount = function(name, secret) {
+        var addAccount = function(name, secret, isTOTP) {
             if(secret === '') {
                 // Bailout
                 return false;
@@ -256,7 +266,7 @@
             var account = new OTPEntry({
                 'index': 0,
                 'issuer': name,
-                'type': 1,
+                'type': isTOTP ? 1 : 2,
                 'algorithm': 1,
                 'secret': secret
             });

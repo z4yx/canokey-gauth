@@ -63,6 +63,13 @@
                         <input type="text" name="keyAccount" id="keyAccount" value="" autocorrect="off" autocapitalize="off" />
                         <label data-l10n-id="add-secret" for="keySecret">Secret key:</label>
                         <input type="text" name="keySecret" id="keySecret" value="" autocorrect="off" autocapitalize="off" />
+                        <fieldset data-role="controlgroup" data-type="horizontal" data-mini="true">
+                        <legend>Type:</legend>
+                            <input type="radio" name="keyType" id="keyTypeTOTP" value="totp" checked="checked">
+                            <label for="keyTypeTOTP">TOTP</label>
+                            <input type="radio" name="keyType" id="keyTypeHOTP" value="hotp">
+                            <label for="keyTypeHOTP">HOTP</label>
+                        </fieldset>
                     </form>
                 </p>
                 <p>
