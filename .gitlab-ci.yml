@@ -1,0 +1,17 @@
+image: node:lts
+
+before_script:
+  - npm i
+
+pages:
+  script:
+  - make
+  - ./node_modules/.bin/gulp tsc
+  - mkdir public
+  - cp -fr {css,js,img,lib,index.html} public
+  artifacts:
+    paths:
+    - public
+  only:
+    - master
+
