@@ -291,17 +291,33 @@ export class Canokey {
     try {
       const chalBytes = Canokey.uint64ToBytes(challenge);
       const nameBytes = this.utf8Encoder.encode(name);
-      let tlv = await this.executeCommand(
-        0x04,
-        Uint8Array.from([
-          0x71,
-          nameBytes.length,
-          ...Array.from(nameBytes),
-          0x74,
-          chalBytes.length,
-          ...Array.from(chalBytes)
-        ])
-      );
+      let tlv: Uint8Array | null = null;
+      for (let wait = 5; wait > 0; wait--) {
+        try {
+          tlv = await this.executeCommand(
+            0x04,
+            Uint8Array.from([
+              0x71,
+              nameBytes.length,
+              ...Array.from(nameBytes),
+              0x74,
+              chalBytes.length,
+              ...Array.from(chalBytes)
+            ])
+          );
+          break
+        } catch (e) {
+          let msg = "" + e;
+          console.debug(msg);
+          if (msg.endsWith("6985"))
+            await Canokey.sleep(1000);
+          else
+            throw e;
+        }
+      }
+      if (!tlv) {
+        throw new Error("Timed out waiting for touch");
+      }
       let digits = 0;
       let code = 0;
       await Canokey.processTlv(tlv, async (tag, data) => {
@@ -403,7 +419,7 @@ export class HWTokenManager {
     let entries = await HWTokenManager.get();
     console.log('entries', entries);
     for (const account of entries)
-        await account.generate();
+      await account.generate();
     return entries;
   }
   private static num2str(val: number, digits: number) {
@@ -423,7 +439,7 @@ export class HWTokenManager {
       });
       HWTokenManager.totpCache[challenge] = cache;
     }
-    console.log("cache=",cache,entry.issuer,cache[entry.issuer])
+    console.log("cache=", cache, entry.issuer, cache[entry.issuer])
     return entry.issuer in cache ? cache[entry.issuer] : null;
   }
   static async calc(entry: OTPEntry) {
